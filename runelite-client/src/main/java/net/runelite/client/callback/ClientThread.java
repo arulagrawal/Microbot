@@ -110,6 +110,7 @@ public class ClientThread
 		try {
 			return Optional.ofNullable(task.get(10000, TimeUnit.MILLISECONDS));
 		} catch (InterruptedException | TimeoutException | ExecutionException e) {
+
 			if (e instanceof InterruptedException) {
 				Thread.currentThread().interrupt();
 				return Optional.empty();

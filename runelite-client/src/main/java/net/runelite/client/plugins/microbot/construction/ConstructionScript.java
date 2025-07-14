@@ -31,12 +31,12 @@ public class ConstructionScript extends Script {
 
     ConstructionState state = ConstructionState.Idle;
 
-    public TileObject getOakLarderSpace() {
-        return Rs2GameObject.getGameObject(15403);
+    public TileObject getOakDungeonDoorSpace() {
+        return Rs2GameObject.findObjectById(15328); // ID for oak dungeon door space
     }
 
-    public TileObject getOakLarder() {
-        return Rs2GameObject.getGameObject(13566);
+    public TileObject getOakDungeonDoor() {
+        return Rs2GameObject.findObjectById(13344); // ID for oak dungeon door
     }
 
     public Rs2NpcModel getButler() {
@@ -87,8 +87,14 @@ public class ConstructionScript extends Script {
     }
 
     private void calculateState() {
-        TileObject oakLarderSpace = getOakLarderSpace();
-        TileObject oakLarder = getOakLarder();
+        TileObject oakDoorSpace = getOakDungeonDoorSpace();
+        TileObject oakDoor = getOakDungeonDoor();
+        if (oakDoor == null) {
+            Microbot.log("no door");
+        }
+        if (oakDoorSpace == null) {
+            Microbot.log("no door space!?");
+        }
         var butler = getButler();
         int plankCount = Rs2Inventory.itemQuantity(ItemID.PLANK_OAK);
 
@@ -98,9 +104,9 @@ public class ConstructionScript extends Script {
             Microbot.log("Insufficient coins to pay butler!");
             return;
         }
-        if (oakLarderSpace == null && oakLarder != null) {
+        if (oakDoorSpace == null && oakDoor != null) {
             state = ConstructionState.Remove;
-        } else if (oakLarderSpace != null && oakLarder == null) {
+        } else if (oakDoorSpace != null && oakDoor == null) {
             if (butler != null) {
                 if (plankCount > 16) {
                     state = ConstructionState.Build;
@@ -114,7 +120,7 @@ public class ConstructionScript extends Script {
                     state = ConstructionState.Idle;
                 }
             }
-        } else if (oakLarderSpace == null) {
+        } else if (oakDoorSpace == null) {
             state = ConstructionState.Idle;
             Microbot.getNotifier().notify("Looks like we are no longer in our house.");
             shutdown();
@@ -122,13 +128,16 @@ public class ConstructionScript extends Script {
     }
 
     private void build() {
-        TileObject oakLarderSpace = getOakLarderSpace();
-        if (oakLarderSpace == null) return;
+        TileObject oakLarderSpace = getOakDungeonDoorSpace();
+        if (oakLarderSpace == null) {
+            Microbot.log("could not find door space");
+            return;
+        }
         if (Rs2GameObject.interact(oakLarderSpace, "Build")) {
             sleepUntil(this::hasFurnitureInterfaceOpen, 1200);
-            Rs2Keyboard.keyPress('2');
-            sleepUntil(() -> getOakLarder() != null, 1200);
-            if (getOakLarder() != null)
+            Rs2Keyboard.keyPress('1');
+            sleepUntil(() -> getOakDungeonDoor() != null, 1200);
+            if (getOakDungeonDoor() != null)
             {
                 lardersBuilt++;
             }
@@ -136,7 +145,7 @@ public class ConstructionScript extends Script {
     }
 
     private void remove() {
-        TileObject oakLarder = getOakLarder();
+        TileObject oakLarder = getOakDungeonDoor();
         if (oakLarder == null) return;
         if (Rs2GameObject.interact(oakLarder, "Remove")) {
             Rs2Dialogue.sleepUntilInDialogue();
@@ -149,7 +158,7 @@ public class ConstructionScript extends Script {
             }
             Rs2Dialogue.sleepUntilHasDialogueOption("Yes");
             Rs2Dialogue.keyPressForDialogueOption(1);
-            sleepUntil(() -> getOakLarderSpace() != null, 1800);
+            sleepUntil(() -> getOakDungeonDoorSpace() != null, 1800);
         }
     }
 
@@ -190,7 +199,7 @@ public class ConstructionScript extends Script {
                 Rs2Dialogue.sleepUntilSelectAnOption();
                 Rs2Dialogue.keyPressForDialogueOption(1);
                 Rs2Widget.sleepUntilHasWidget("Enter amount:");
-                Rs2Keyboard.typeString("24");
+                Rs2Keyboard.typeString("20");
                 Rs2Keyboard.enter();
                 Rs2Dialogue.clickContinue();
                 return;
