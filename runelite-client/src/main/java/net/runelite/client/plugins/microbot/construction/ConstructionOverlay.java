@@ -24,7 +24,7 @@ public class ConstructionOverlay extends OverlayPanel {
     @Override
     public Dimension render(Graphics2D graphics) {
         try {
-            Color lardersColor = plugin.constructionScript.lardersBuilt == 0
+            Color lardersColor = plugin.constructionScript.doorsBuilt == 0
                     ? Color.RED
                     : Color.GREEN;
 
@@ -52,7 +52,7 @@ public class ConstructionOverlay extends OverlayPanel {
 
             panelComponent.getChildren().add(LineComponent.builder()
                     .left("Oak Larders Made:")
-                    .right(plugin.constructionScript.lardersBuilt.toString())
+                    .right(plugin.constructionScript.doorsBuilt.toString())
                     .rightColor(lardersColor)
                     .build());
 
