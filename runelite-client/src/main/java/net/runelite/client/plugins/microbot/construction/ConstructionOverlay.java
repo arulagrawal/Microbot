@@ -1,7 +1,7 @@
 package net.runelite.client.plugins.microbot.construction;
 
 import net.runelite.client.plugins.microbot.Microbot;
-import net.runelite.client.plugins.microbot.construction.enums.ConstructionState;
+import net.runelite.client.plugins.microbot.construction.enums.State;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.components.LineComponent;
@@ -28,7 +28,7 @@ public class ConstructionOverlay extends OverlayPanel {
                     ? Color.RED
                     : Color.GREEN;
 
-            Color stateColor = plugin.constructionScript.state == ConstructionState.Stopped
+            Color stateColor = plugin.constructionScript.state == State.Stopped
                     ? Color.RED
                     : Color.GREEN;
 

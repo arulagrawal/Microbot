@@ -1,6 +1,6 @@
 package net.runelite.client.plugins.microbot.construction.enums;
 
-public enum ConstructionState {
+public enum State {
     Build,
     Remove,
     Butler,

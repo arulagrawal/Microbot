@@ -6,7 +6,7 @@ import net.runelite.api.TileObject;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
-import net.runelite.client.plugins.microbot.construction.enums.ConstructionState;
+import net.runelite.client.plugins.microbot.construction.enums.State;
 import net.runelite.client.plugins.microbot.util.dialogues.Rs2Dialogue;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
 import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
@@ -26,7 +26,7 @@ public class ConstructionScript extends Script {
     public Boolean servantsBagEmpty = false;
     public Boolean insufficientCoins = false;
 
-    ConstructionState state = ConstructionState.Idle;
+    State state = State.Idle;
 
     // Returns the door space object. ID 15328 is for a "Door hotspot".
     public TileObject getOakDoorSpace() {
@@ -52,7 +52,7 @@ public class ConstructionScript extends Script {
         doorsPerHour = 0;
         servantsBagEmpty = false;
         insufficientCoins = false;
-        state = ConstructionState.Starting;
+        state = State.Starting;
 
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
@@ -62,13 +62,13 @@ public class ConstructionScript extends Script {
                 Rs2Tab.switchToInventoryTab();
                 calculateState();
                 Microbot.log("got new state");
-                if (state == ConstructionState.Build) {
+                if (state == State.Build) {
                     build();
-                } else if (state == ConstructionState.Remove) {
+                } else if (state == State.Remove) {
                     remove();
-                } else if (state == ConstructionState.Butler) {
+                } else if (state == State.Butler) {
                     butler();
-                } else if (state == ConstructionState.Stopped) {
+                } else if (state == State.Stopped) {
                     servantsBagEmpty = false;
                     insufficientCoins = false;
                     Microbot.stopPlugin(Microbot.getPlugin("ConstructionPlugin"));
@@ -94,41 +94,95 @@ public class ConstructionScript extends Script {
         int plankCount = Rs2Inventory.itemQuantity(ItemID.PLANK_OAK);
 
         if (servantsBagEmpty && insufficientCoins) {
-            state = ConstructionState.Stopped;
+            state = State.Stopped;
             Microbot.getNotifier().notify("Insufficient coins to pay butler!");
             Microbot.log("Insufficient coins to pay butler!");
             return;
         }
 
-        if (door != null) {
-            // If the door is built, we need to remove it.
-            state = ConstructionState.Remove;
-        } else if (doorSpace != null) {
-            // If we have a door space, check if we have planks to build.
-            if (plankCount >= 10) {
-                state = ConstructionState.Build;
-            } else {
-                // Not enough planks, call the butler if he's around.
-                state = (butler != null) ? ConstructionState.Butler : ConstructionState.Idle;
+        boolean hasDoor = door != null;
+        boolean hasDoorSpace = doorSpace != null;
+        boolean hasButler = butler != null;
+
+        if (hasDoorSpace && plankCount == 20) {
+            if (hasButler) {
+                // initial start state
+                // call butlet and get to building
+                state = State.Butler;
             }
-        } else {
-            Microbot.log("couldn't find door or door space?");
-            // No door and no door space found.
-            state = ConstructionState.Idle;
-            Microbot.getNotifier().notify("Could not find a door or door space. Make sure you are in your house.");
-            // Consider shutting down if this state persists.
-            // shutdown();
+            else{
+                // after calling butler, he's gone
+                // now we need to build
+                state = State.Build;
+            }
+            return;
         }
+
+        if (hasDoorSpace && plankCount == 10) {
+            state = State.Build;
+            return;
+        }
+
+        if (hasDoor && plankCount == 10) {
+            state = State.Remove;
+            return;
+        }
+
+        if (hasDoor && plankCount == 0) {
+            // we are waiting on the butler to bring the planks
+            state = State.Idle;
+            return;
+        }
+
+        if (hasDoor && plankCount == 20) {
+            state = State.Remove;
+            return;
+        }
+
+//        if (hasDoor && hasButler && plankCount == 20) {
+//            state = State.Butler;
+//            return;
+//        }
+//
+//        if (hasDoor && !hasButler && plankCount == 20) {
+//            state = State.Remove;
+//            return;
+//        }
+
+        if (!hasDoorSpace && !hasDoor) {
+            state = State.Idle;
+            Microbot.log("no door or door space, check ids");
+        }
+
+//        if (door != null) {
+//            // If the door is built, we need to remove it.
+//            state = ConstructionState.Remove;
+//        } else if (doorSpace != null) {
+//            // If we have a door space, check if we have planks to build.
+//            if (plankCount >= 10) {
+//                state = ConstructionState.Build;
+//            } else {
+//                // Not enough planks, call the butler if he's around.
+//                state = (butler != null) ? ConstructionState.Butler : ConstructionState.Idle;
+//            }
+//        } else {
+//            Microbot.log("couldn't find door or door space?");
+//            // No door and no door space found.
+//            state = ConstructionState.Idle;
+//            Microbot.getNotifier().notify("Could not find a door or door space. Make sure you are in your house.");
+//            // Consider shutting down if this state persists.
+//            // shutdown();
+//        }
     }
 
     private void build() {
         TileObject doorSpace = getOakDoorSpace();
         if (doorSpace == null) return;
         if (Rs2GameObject.interact(doorSpace, "Build")) {
-            sleepUntil(this::hasFurnitureInterfaceOpen, 1500);
+            sleepUntil(this::hasFurnitureInterfaceOpen, 1200);
             // Press '4' for Oak Door. This might need to be changed if the menu is different.
             Rs2Keyboard.keyPress('1');
-            sleepUntil(() -> getOakDoor() != null, 1500);
+            sleepUntil(() -> getOakDoor() != null, 1200);
             if (getOakDoor() != null)
             {
                 doorsBuilt++;
@@ -143,14 +197,14 @@ public class ConstructionScript extends Script {
             Rs2Dialogue.sleepUntilInDialogue();
 
             // Butler might interrupt, so re-attempt if the confirmation dialogue isn't found.
-            if (!Rs2Dialogue.hasQuestion("Really remove it?"))
-            {
-                sleep(600);
-                Rs2GameObject.interact(door, "Remove");
-            }
+//            if (!Rs2Dialogue.hasQuestion("Really remove it?"))
+//            {
+//                sleep(600);
+//                Rs2GameObject.interact(door, "Remove");
+//            }
             Rs2Dialogue.sleepUntilHasDialogueOption("Yes");
             Rs2Dialogue.keyPressForDialogueOption(1); // Press '1' for "Yes"
-            sleepUntil(() -> getOakDoorSpace() != null, 1800);
+            sleepUntil(() -> getOakDoorSpace() != null, 1600);
         }
     }
 
