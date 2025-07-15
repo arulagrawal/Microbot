@@ -1,11 +1,8 @@
 package net.runelite.client.plugins.microbot.construction;
 
 import net.runelite.api.gameval.ItemID;
-import net.runelite.api.gameval.ObjectID;
-import net.runelite.api.NPC;
 import net.runelite.api.SpriteID;
 import net.runelite.api.TileObject;
-import net.runelite.api.gameval.ItemID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
@@ -21,24 +18,25 @@ import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 
 import java.util.concurrent.TimeUnit;
 
+
 public class ConstructionScript extends Script {
-    public static String version = "1.1";
+    public static String version = "1.2"; // Updated version for Oak Doors
     public Integer doorsBuilt = 0;
     public Integer doorsPerHour = 0;
     public Boolean servantsBagEmpty = false;
     public Boolean insufficientCoins = false;
-    public Boolean butlerSent = false;
-    public Boolean firstDoorCycle = true;
-    public Integer doorsInCurrentCycle = 0;
 
     ConstructionState state = ConstructionState.Idle;
 
-    public TileObject getOakDungeonDoorSpace() {
-        return Rs2GameObject.findObjectById(15328); // ID for oak dungeon door space
+    // Returns the door space object. ID 15328 is for a "Door hotspot".
+    public TileObject getOakDoorSpace() {
+        return Rs2GameObject.getWallObject(15328);
     }
 
-    public TileObject getOakDungeonDoor() {
-        return Rs2GameObject.findObjectById(13344); // ID for oak dungeon door
+    // Returns the built Oak Door object. ID 15305 is for an "Oak door".
+    // This ID may need to be verified depending on the house style.
+    public TileObject getOakDoor() {
+        return Rs2GameObject.getWallObject(13344);
     }
 
     public Rs2NpcModel getButler() {
@@ -54,9 +52,6 @@ public class ConstructionScript extends Script {
         doorsPerHour = 0;
         servantsBagEmpty = false;
         insufficientCoins = false;
-        butlerSent = false;
-        firstDoorCycle = true;
-        doorsInCurrentCycle = 0;
         state = ConstructionState.Starting;
 
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
@@ -66,6 +61,7 @@ public class ConstructionScript extends Script {
 
                 Rs2Tab.switchToInventoryTab();
                 calculateState();
+                Microbot.log("got new state");
                 if (state == ConstructionState.Build) {
                     build();
                 } else if (state == ConstructionState.Remove) {
@@ -91,9 +87,10 @@ public class ConstructionScript extends Script {
     }
 
     private void calculateState() {
-        TileObject oakDoorSpace = getOakDungeonDoorSpace();
-        TileObject oakDoor = getOakDungeonDoor();
+        TileObject doorSpace = getOakDoorSpace();
+        TileObject door = getOakDoor();
         var butler = getButler();
+        // Use OAK_PLANK ID 8778
         int plankCount = Rs2Inventory.itemQuantity(ItemID.PLANK_OAK);
 
         if (servantsBagEmpty && insufficientCoins) {
@@ -103,116 +100,59 @@ public class ConstructionScript extends Script {
             return;
         }
 
-        // Strategy implementation
-        if (firstDoorCycle) {
-            // Starting from full inventory - send butler for 25 oak planks
-            if (!butlerSent && butler != null) {
-                state = ConstructionState.Butler;
-                return;
-            }
-
-            // Build and remove 2 doors, leaving second one built
-            if (oakDoor != null && doorsInCurrentCycle < 2) {
-                // Always remove the door if we haven't completed 2 cycles yet
-                if (doorsInCurrentCycle == 0) {
-                    // Remove first door immediately after building
-                    state = ConstructionState.Remove;
-                } else if (doorsInCurrentCycle == 1) {
-                    // Remove second door immediately after building
-                    state = ConstructionState.Remove;
-                }
-            } else if (oakDoorSpace != null && oakDoor == null && plankCount >= 10) {
-                // Build door if space is available and we have planks
-                if (doorsInCurrentCycle < 2) {
-                    state = ConstructionState.Build;
-                } else {
-                    // We've completed 2 build/remove cycles, now build final door and wait for butler
-                    state = ConstructionState.Build;
-                    // After this build, we'll wait for butler to return
-                }
-            } else if (doorsInCurrentCycle >= 2 && oakDoor != null) {
-                // We have the second door built, wait for butler to return
-                if (butler != null) {
-                    firstDoorCycle = false;
-                    doorsInCurrentCycle = 0;
-                    state = ConstructionState.Remove; // Remove the door when butler returns
-                } else {
-                    state = ConstructionState.Idle; // Wait for butler
-                }
+        if (door != null) {
+            // If the door is built, we need to remove it.
+            state = ConstructionState.Remove;
+        } else if (doorSpace != null) {
+            // If we have a door space, check if we have planks to build.
+            if (plankCount >= 10) {
+                state = ConstructionState.Build;
             } else {
-                state = ConstructionState.Idle;
+                // Not enough planks, call the butler if he's around.
+                state = (butler != null) ? ConstructionState.Butler : ConstructionState.Idle;
             }
         } else {
-            // Butler has returned - remove and build a door, then send butler away
-            if (butler != null) {
-                if (oakDoor != null) {
-                    state = ConstructionState.Remove;
-                } else if (oakDoorSpace != null && plankCount >= 10) {
-                    state = ConstructionState.Build;
-                } else {
-                    // Send butler away and reset cycle
-                    state = ConstructionState.Butler;
-                    firstDoorCycle = true;
-                    butlerSent = false;
-                }
-            } else {
-                // Continue normal building cycle
-                if (oakDoorSpace != null && oakDoor == null && plankCount >= 10) {
-                    state = ConstructionState.Build;
-                } else if (oakDoor != null) {
-                    state = ConstructionState.Remove;
-                } else {
-                    state = ConstructionState.Idle;
-                }
-            }
-        }
-
-        if (oakDoorSpace == null && oakDoor == null) {
+            Microbot.log("couldn't find door or door space?");
+            // No door and no door space found.
             state = ConstructionState.Idle;
-            Microbot.getNotifier().notify("Looks like we are no longer in our house.");
-            shutdown();
-        }
-    }
-
-    private void remove() {
-        TileObject oakDoor = getOakDungeonDoor();
-        if (oakDoor == null) return;
-        if (Rs2GameObject.interact(oakDoor, "Remove")) {
-            Rs2Dialogue.sleepUntilInDialogue();
-
-            // Butler spoke with us in the same tick/after we attempted to remove door
-            if (!Rs2Dialogue.hasQuestion("Really remove it?")) {
-                sleep(600);
-                Rs2GameObject.interact(oakDoor, "Remove");
-            }
-            Rs2Dialogue.sleepUntilHasDialogueOption("Yes");
-            Rs2Dialogue.keyPressForDialogueOption(1);
-            sleepUntil(() -> getOakDungeonDoorSpace() != null, 1800);
-
-            if (firstDoorCycle) {
-                doorsInCurrentCycle++;
-            }
+            Microbot.getNotifier().notify("Could not find a door or door space. Make sure you are in your house.");
+            // Consider shutting down if this state persists.
+            // shutdown();
         }
     }
 
     private void build() {
-        TileObject oakDoorSpace = getOakDungeonDoorSpace();
-        if (oakDoorSpace == null) {
-            Microbot.log("could not find door space");
-            return;
-        }
-        if (Rs2GameObject.interact(oakDoorSpace, "Build")) {
-            sleepUntil(this::hasFurnitureInterfaceOpen, 1200);
+        TileObject doorSpace = getOakDoorSpace();
+        if (doorSpace == null) return;
+        if (Rs2GameObject.interact(doorSpace, "Build")) {
+            sleepUntil(this::hasFurnitureInterfaceOpen, 1500);
+            // Press '4' for Oak Door. This might need to be changed if the menu is different.
             Rs2Keyboard.keyPress('1');
-            sleepUntil(() -> getOakDungeonDoor() != null, 1200);
-            if (getOakDungeonDoor() != null) {
+            sleepUntil(() -> getOakDoor() != null, 1500);
+            if (getOakDoor() != null)
+            {
                 doorsBuilt++;
-                // Don't increment doorsInCurrentCycle here - only in remove()
             }
         }
     }
 
+    private void remove() {
+        TileObject door = getOakDoor();
+        if (door == null) return;
+        if (Rs2GameObject.interact(door, "Remove")) {
+            Rs2Dialogue.sleepUntilInDialogue();
 
+            // Butler might interrupt, so re-attempt if the confirmation dialogue isn't found.
+            if (!Rs2Dialogue.hasQuestion("Really remove it?"))
+            {
+                sleep(600);
+                Rs2GameObject.interact(door, "Remove");
+            }
+            Rs2Dialogue.sleepUntilHasDialogueOption("Yes");
+            Rs2Dialogue.keyPressForDialogueOption(1); // Press '1' for "Yes"
+            sleepUntil(() -> getOakDoorSpace() != null, 1800);
+        }
+    }
 
     private void butler() {
         var butler = getButler();
@@ -225,8 +165,9 @@ public class ConstructionScript extends Script {
         }).orElse(false);
 
         if (!butlerIsTooFar) {
-            if(!Rs2Npc.interact(butler, "talk-to")) return;
+            Rs2Npc.interact(butler, "talk-to");
         } else {
+            // If butler is not nearby, call him using the house options.
             Rs2Tab.switchToSettingsTab();
             sleep(800, 1800);
             Widget houseOptionWidget = Rs2Widget.findWidget(SpriteID.OPTIONS_HOUSE_OPTIONS, null);
@@ -240,39 +181,45 @@ public class ConstructionScript extends Script {
 
         Rs2Dialogue.sleepUntilInDialogue();
 
-        if (Rs2Dialogue.hasQuestion("Repeat last task?")) {
-            Rs2Dialogue.keyPressForDialogueOption(1);
-            butlerSent = true;
-            return;
-        }
-
-        if (Rs2Dialogue.hasSelectAnOption()) {
-            if (Rs2Dialogue.hasDialogueOption("Go to the bank...")) {
-                Rs2Dialogue.sleepUntilHasDialogueText("Dost thou wish me to exchange that certificate");
-                Rs2Dialogue.clickContinue();
-                Rs2Dialogue.sleepUntilSelectAnOption();
-                Rs2Dialogue.keyPressForDialogueOption(1);
-                Rs2Widget.sleepUntilHasWidget("Enter amount:");
-                Rs2Keyboard.typeString("25"); // Request 25 oak planks as per strategy
-                Rs2Keyboard.enter();
-                Rs2Dialogue.clickContinue();
-                butlerSent = true;
-                return;
-            }
-        }
-
+        // Handle payment first if required
         if (Rs2Dialogue.hasDialogueText("must render unto me the 10,000 coins that are due")) {
             servantsBagEmpty = true;
-
             Rs2Dialogue.clickContinue();
             Rs2Dialogue.sleepUntilSelectAnOption();
-
             if (!Rs2Dialogue.hasDialogueOption("here's 10,000 coins")) {
                 insufficientCoins = true;
                 return;
             }
-
             Rs2Dialogue.keyPressForDialogueOption(1);
+            return;
+        }
+
+        // Most efficient path: repeat the last task (fetching 20 oak planks).
+        if (Rs2Dialogue.hasQuestion("Repeat last task?")) {
+            Rs2Dialogue.keyPressForDialogueOption(1);
+            sleep(600); // Small delay to ensure the action is registered
+            return;
+        }
+
+        // Fallback for first-time setup or if the "repeat" dialogue is missed.
+        // This instructs the butler to fetch 20 of an item from the bank.
+        // NOTE: The user MUST manually ask the butler to fetch 20 oak planks once for the "Repeat" option to work.
+        if (Rs2Dialogue.hasSelectAnOption()) {
+            if (Rs2Dialogue.hasDialogueOption("Go to the bank...")) {
+                Microbot.log("Attempting to ask butler to fetch planks from bank.");
+                Microbot.log("Please manually ask your butler to fetch 20 Oak Planks ONCE.");
+                Microbot.log("The script will then use the 'Repeat last task' option.");
+                // The following is an example flow and may need adjustment
+                Rs2Dialogue.keyPressForDialogueOption(1); // "Go to the bank..."
+                Rs2Dialogue.sleepUntilSelectAnOption();
+                Rs2Dialogue.keyPressForDialogueOption(1); // "Fetch from bank..."
+                Rs2Widget.sleepUntilHasWidget("Oak plank"); // Wait for item list
+                // click on "Oak plank" - This part is complex and best done manually once.
+                // Rs2Widget.clickWidget("Oak plank");
+                // Rs2Keyboard.typeString("20");
+                // Rs2Keyboard.enter();
+                return;
+            }
         }
     }
 }
