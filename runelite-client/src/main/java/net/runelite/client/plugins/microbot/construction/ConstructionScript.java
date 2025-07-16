@@ -61,7 +61,7 @@ public class ConstructionScript extends Script {
 
                 Rs2Tab.switchToInventoryTab();
                 calculateState();
-                Microbot.log("got new state");
+//                Microbot.log("got new state");
                 if (state == State.Build) {
                     build();
                 } else if (state == State.Remove) {
@@ -128,7 +128,12 @@ public class ConstructionScript extends Script {
             return;
         }
 
-        if (hasDoor && plankCount == 0) {
+        if (hasDoor && plankCount == 0 && hasButler) {
+            state = State.Remove;
+            return;
+        }
+
+        if (hasDoor && plankCount == 0 && !hasButler) {
             // we are waiting on the butler to bring the planks
             state = State.Idle;
             return;
@@ -137,6 +142,15 @@ public class ConstructionScript extends Script {
         if (hasDoor && plankCount == 20) {
             state = State.Remove;
             return;
+        }
+
+
+
+        if (plankCount != 0 && plankCount != 10 && plankCount != 20) {
+            // weird number of planks,
+            // probably ran out of planks
+            state = State.Idle;
+            shutdown();
         }
 
 //        if (hasDoor && hasButler && plankCount == 20) {
