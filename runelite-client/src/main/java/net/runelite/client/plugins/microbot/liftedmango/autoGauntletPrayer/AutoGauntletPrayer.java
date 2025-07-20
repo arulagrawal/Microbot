@@ -91,16 +91,20 @@ public class AutoGauntletPrayer extends Plugin {
         }
 
         HeadIcon headIcon = Rs2Reflection.getHeadIcon(hunllef);
+
         System.out.println("Headicon: " + headIcon);
 
         switch (headIcon) {
             case RANGED:
+                checkAndTogglePrayers();
                 handleRangedHeadIcon();
                 break;
             case MAGIC:
+                checkAndTogglePrayers();
                 handleMagicHeadIcon();
                 break;
             case MELEE:
+                checkAndTogglePrayers();
                 handleMeleeHeadIcon();
                 break;
             default:
@@ -126,8 +130,6 @@ public class AutoGauntletPrayer extends Plugin {
             default:
                 break;
         }
-
-        checkAndTogglePrayers();
     }
 
     @Subscribe
